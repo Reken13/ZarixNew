@@ -130,40 +130,112 @@ print(f'✓ og-image.png saved ({W}×{H}px)')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 2. FAVICON BASE  512 × 512  →  resize to needed sizes
+# 2. FAVICON BASE  512 × 512  — logo style: Z + circuit arc
 # ════════════════════════════════════════════════════════════════════════════
 SZ = 512
-fav = Image.new('RGBA', (SZ, SZ), (0, 0, 0, 0))
+CX, CY = SZ // 2, SZ // 2
 
-# rounded-square background
+fav = Image.new('RGBA', (SZ, SZ), (0, 0, 0, 0))
 fd = ImageDraw.Draw(fav)
+
+# rounded-square background (dark)
 fd.rounded_rectangle([0, 0, SZ, SZ], radius=int(SZ * 0.22), fill=(*BG, 255))
 
-# subtle inner glow
-draw_glow(fav, SZ // 2, SZ // 2, int(SZ * 0.6), ACCENT, alpha=35)
-
-# "Z" lettermark — drawn as thick stroked path
+# ── subtle background glow ───────────────────────────────────────────────────
+draw_glow(fav, CX, CY, int(SZ * 0.55), ACCENT, alpha=22)
 fd = ImageDraw.Draw(fav)
-z_font = ImageFont.truetype(FONT_BOLD, int(SZ * 0.64))
-bbox = z_font.getbbox("Z")
-zw = bbox[2] - bbox[0]
-zh = bbox[3] - bbox[1]
-zx = (SZ - zw) // 2 - bbox[0]
-zy = (SZ - zh) // 2 - bbox[1]
 
-# shadow / glow pass
-for offset in range(8, 0, -2):
-    a = int(100 * (offset / 8) ** 2)
-    fd.text((zx + offset, zy + offset), "Z", font=z_font, fill=(*ACCENT, a))
-# main Z
-fd.text((zx, zy), "Z", font=z_font, fill=(*ACCENT, 255))
+# ── outer arc ring (open gap at top-right, like the logo) ────────────────────
+arc_r   = int(SZ * 0.42)   # radius to centre of stroke
+arc_w   = int(SZ * 0.022)  # stroke width
+pad     = arc_w // 2
+for stroke_delta in range(-arc_w // 2, arc_w // 2 + 1):
+    r = arc_r + stroke_delta
+    box = [CX - r, CY - r, CX + r, CY + r]
+    # arc from ~210° to ~345°  (gap at top-right ≈ 345°–210°)
+    alpha_val = max(0, 255 - abs(stroke_delta) * 18)
+    fd.arc(box, start=210, end=340, fill=(*ACCENT, alpha_val), width=1)
 
-# green dot  (like the logo-i dot in the site)
-dot_r = int(SZ * 0.055)
-dot_cx = int(SZ * 0.64)
-dot_cy = int(SZ * 0.18)
-fd.ellipse([dot_cx - dot_r, dot_cy - dot_r, dot_cx + dot_r, dot_cy + dot_r],
-           fill=(*GREEN, 255))
+# second thinner arc (bottom-left to bottom-right for the lower sweep)
+arc_r2 = arc_r - int(SZ * 0.01)
+for stroke_delta in range(-arc_w // 2, arc_w // 2 + 1):
+    r = arc_r2 + stroke_delta
+    box = [CX - r, CY - r, CX + r, CY + r]
+    alpha_val = max(0, 255 - abs(stroke_delta) * 18)
+    fd.arc(box, start=20, end=170, fill=(*ACCENT2, alpha_val), width=1)
+
+# ── circuit lines left ────────────────────────────────────────────────────────
+line_col   = (*ACCENT, 200)
+node_col   = (*ACCENT, 220)
+line_w     = max(2, int(SZ * 0.012))
+node_r     = int(SZ * 0.025)
+
+def circuit_line(draw, x1, y1, x2, y2, bend_x=None):
+    """Horizontal segment, optional vertical jog, then continue."""
+    if bend_x is None:
+        draw.line([(x1, y1), (x2, y2)], fill=line_col, width=line_w)
+    else:
+        draw.line([(x1, y1), (bend_x, y1)], fill=line_col, width=line_w)
+        draw.line([(bend_x, y1), (bend_x, y2)], fill=line_col, width=line_w)
+        draw.line([(bend_x, y2), (x2, y2)], fill=line_col, width=line_w)
+
+def node(draw, x, y):
+    draw.ellipse([x - node_r, y - node_r, x + node_r, y + node_r],
+                 outline=node_col, width=line_w, fill=(*BG, 255))
+
+# left lines (3 horizontal, staggered)
+lx0, lx1 = int(SZ * 0.04), int(SZ * 0.22)
+ly_top   = int(CY - SZ * 0.10)
+ly_mid   = int(CY)
+ly_bot   = int(CY + SZ * 0.10)
+circuit_line(fd, lx0, ly_top, lx1, ly_top)
+node(fd, lx0, ly_top)
+circuit_line(fd, lx0 + int(SZ*0.03), ly_mid, lx1, ly_mid)
+node(fd, lx0 + int(SZ*0.03), ly_mid)
+circuit_line(fd, lx0, ly_bot, lx1, ly_bot)
+node(fd, lx0, ly_bot)
+
+# right lines
+rx0, rx1 = int(SZ * 0.78), int(SZ * 0.96)
+circuit_line(fd, rx0, ly_top, rx1, ly_top)
+node(fd, rx1, ly_top)
+circuit_line(fd, rx0, ly_mid, rx1 - int(SZ*0.03), ly_mid)
+node(fd, rx1 - int(SZ*0.03), ly_mid)
+circuit_line(fd, rx0, ly_bot, rx1, ly_bot)
+node(fd, rx1, ly_bot)
+
+# ── Z lettermark with gradient ───────────────────────────────────────────────
+z_font = ImageFont.truetype(FONT_BOLD, int(SZ * 0.58))
+bbox   = z_font.getbbox("Z")
+zw     = bbox[2] - bbox[0]
+zh     = bbox[3] - bbox[1]
+zx     = CX - zw // 2 - bbox[0]
+zy     = CY - zh // 2 - bbox[1] - int(SZ * 0.02)
+
+# gradient: draw Z twice — dark navy base then bright accent on top blended
+NAVY = (10, 30, 90)
+# shadow layer (depth)
+for off in range(6, 0, -2):
+    a = int(80 * (off / 6) ** 2)
+    fd.text((zx + off, zy + off), "Z", font=z_font, fill=(*NAVY, a))
+
+# gradient simulation: draw Z in navy, overlay in accent with top-to-bottom alpha
+z_mask = Image.new('RGBA', (SZ, SZ), (0, 0, 0, 0))
+zm = ImageDraw.Draw(z_mask)
+zm.text((zx, zy), "Z", font=z_font, fill=(255, 255, 255, 255))
+
+# vertical gradient layer
+grad = Image.new('RGBA', (SZ, SZ), (0, 0, 0, 0))
+for y in range(zy, zy + zh + 1):
+    t  = (y - zy) / max(zh, 1)        # 0 = top (navy), 1 = bottom (accent)
+    r  = int(NAVY[0] + (ACCENT[0] - NAVY[0]) * t)
+    g  = int(NAVY[1] + (ACCENT[1] - NAVY[1]) * t)
+    b  = int(NAVY[2] + (ACCENT[2] - NAVY[2]) * t)
+    ImageDraw.Draw(grad).line([(0, y), (SZ, y)], fill=(r, g, b, 255))
+
+grad.putalpha(z_mask.split()[3])
+fav.alpha_composite(grad)
+fd = ImageDraw.Draw(fav)
 
 # ── save at required sizes ─────────────────────────────────────────────────
 def save_favicon(size, filename):
